@@ -6,11 +6,13 @@ import { Stack } from 'expo-router';
 export default function Layout() {
   return (
     <SafeAreaProvider>
-      <Stack>
-        {/* The affected app hits this in a native-stack modal (iOS pageSheet);
-            not yet isolated whether the modal is required or just makes the
-            react-native-screens content-wrapper churn visible in logs. */}
-        <Stack.Screen name="repro" options={{ presentation: 'modal', title: 'Repro' }} />
+      {/* Mirrors the affected app: headers are OFF at the stack level, and the
+          modal screen itself flips headerShown to true via an inline
+          <Stack.Screen> — the "dynamically changing header's visibility in
+          modals" pattern react-native-screens warns remounts the screen. */}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" options={{ headerShown: true, title: 'Home' }} />
+        <Stack.Screen name="repro" options={{ presentation: 'modal' }} />
       </Stack>
     </SafeAreaProvider>
   );
