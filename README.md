@@ -19,7 +19,11 @@ npm install
 npx expo start
 ```
 
-Open on an **iOS** device or simulator (Expo Go works — no custom native code).
+Open on an **iOS** device or simulator with an **SDK 57-compatible client**:
+on a simulator/emulator, `npx expo start` + pressing `i`/`a` auto-installs a
+matching Expo Go build; on a physical device, use any SDK 57 development build
+(the App Store Expo Go may lag behind the current SDK). No custom native code
+is required.
 
 1. Tap **"Open keyboard repro (modal)"**.
 2. Tap the text field and type **two digits**.
