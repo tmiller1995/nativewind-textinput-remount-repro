@@ -14,8 +14,8 @@ export default function Home() {
         <ScreenContent path="app/index.tsx" title="Home"></ScreenContent>
 
         <View className={styles.buttonWrapper}>
-          <Link href={{ pathname: '/details', params: { name: 'Dan' } }} asChild>
-            <Button title="Show Details" className="mx-6" />
+          <Link href="/repro" asChild>
+            <Button title="Open keyboard repro (modal)" className="mx-6" />
           </Link>
         </View>
       </Container>
