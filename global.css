@@ -1,24 +1,3 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/*
- * Semantic color tokens as CSS variables, mirroring the app this bug was
- * diagnosed in: `:root` = light, prefers-color-scheme block = dark. Tailwind
- * maps each --color-* to a semantic class (tailwind.config.js), so call sites
- * use `bg-surface` / `border-border-control` with no `dark:` prefix and the
- * interop resolves them per OS color scheme at runtime.
- */
-:root {
-  --color-surface: #ffffff;
-  --color-text-primary: #16171e;
-  --color-border-control: #878a9d;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-surface: #241d3f;
-    --color-text-primary: #f4f2fb;
-    --color-border-control: #8476b2;
-  }
-}

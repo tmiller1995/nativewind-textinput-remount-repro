@@ -1,119 +1,90 @@
 import { Stack, useRouter } from 'expo-router';
-import { useColorScheme } from 'nativewind';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 /**
- * Repro for: conditional template-literal className on a TextInput remounts the
- * native input on parent re-render (iOS / Fabric) — the focused keyboard
- * dismisses after the first keystroke, with NO onBlur fired.
+ * Repro: on iOS (Fabric), a native-stack MODAL whose header visibility is
+ * flipped on from inside the screen (navigator default headerShown:false →
+ * screen sets headerShown:true) REMOUNTS its screen content on every re-render
+ * for which the <Stack.Screen> options prop has a fresh object identity — the
+ * idiomatic inline-options pattern. A focused TextInput is destroyed
+ * mid-typing: the keyboard dismisses after the first keystroke and onBlur
+ * NEVER fires. Android is unaffected.
  *
- * This mirrors the affected app's real composition: a text-field component
- * (wrapper View + label + TextInput) whose conditional classes resolve through
- * CSS-variable-backed semantic colors (see global.css + tailwind.config.js),
- * inside a ScrollView with keyboard-handling props, presented as a modal.
+ * Console fingerprint while typing (per keystroke):
+ *   WARN  Dynamically changing header's visibility in modals will result in
+ *         remounting the screen and losing all local state.
+ *   WARN  Failed to find parent screen controller from
+ *         <RNSScreenContentWrapper ... tag = N>.   ← tag increments every time
  *
- * Flip USE_STYLE_OBJECT to true (identical conditional styling via a plain
- * style object) and the bug disappears — same component, same re-renders.
+ * Flip STATIC_HEADER_OPTIONS to true (identical header, options identity
+ * hoisted to a module constant) and the bug disappears.
+ *
+ * Ingredients verified required (each removed independently → no repro):
+ *   - presentation: 'modal' with the navigator-level headerShown:false and the
+ *     in-screen flip to true (declaring headerShown:true at the navigator
+ *     level instead → no repro)
+ *   - fresh options object identity per render (static/memoized → no repro)
+ * Verified irrelevant: how the TextInput is styled (NativeWind conditional
+ * className vs plain style objects — both arms behave identically), ScrollView
+ * keyboard props, CSS-variable themes, tree size.
  */
-const USE_STYLE_OBJECT = false; // ← flip to true: bug disappears
+const STATIC_HEADER_OPTIONS = false; // ← flip to true: bug disappears
 
-function Field({
-  label,
-  value,
-  onChangeText,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-}) {
-  const [focused, setFocused] = useState(false);
-  // Mirrors the affected app's field component, which resolves a few colors via
-  // NativeWind's useColorScheme on every render (placeholder tint etc.).
-  const { colorScheme } = useColorScheme();
-  const placeholderColor = colorScheme === 'dark' ? '#948dae' : '#6b6e81';
-
-  const borderClass = focused ? 'border-2 border-teal-500' : 'border border-border-control';
-  const borderStyle = focused
-    ? { borderWidth: 2, borderColor: '#0d9488' }
-    : { borderWidth: 1, borderColor: '#878a9d' };
-
-  return (
-    <View className="w-32">
-      <Text className="mb-1 text-sm text-text-primary">{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        onFocus={() => setFocused(true)}
-        onBlur={() => {
-          setFocused(false);
-          console.log('BLUR fired'); // never logs when the bug kills the keyboard
-        }}
-        keyboardType="number-pad"
-        placeholder="—"
-        placeholderTextColor={placeholderColor}
-        className={
-          USE_STYLE_OBJECT
-            ? 'min-h-[48px] rounded-xl bg-surface px-4 text-base text-text-primary'
-            : `min-h-[48px] rounded-xl bg-surface px-4 text-base text-text-primary ${borderClass}`
-        }
-        style={USE_STYLE_OBJECT ? borderStyle : undefined}
-      />
-    </View>
-  );
-}
+const HEADER_OPTIONS = { headerShown: true, title: 'Log play' };
 
 export default function RemountRepro() {
   const router = useRouter();
   const [value, setValue] = useState('');
+  const [focused, setFocused] = useState(false);
 
   return (
-    <View className="flex-1 bg-surface">
-      {/* Mirrors the affected app: the modal flips headerShown to true from
-          INSIDE the screen, and the options object + headerLeft closure are
-          recreated on every render (so every keystroke). */}
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'Log play',
-          headerLeft: () => (
-            <Pressable onPress={() => router.back()} hitSlop={10}>
-              <Text className="text-base text-teal-700">Cancel</Text>
-            </Pressable>
-          ),
-        }}
-      />
+    <View className="flex-1 bg-white">
+      {STATIC_HEADER_OPTIONS ? (
+        <Stack.Screen options={HEADER_OPTIONS} />
+      ) : (
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            title: 'Log play',
+            headerLeft: () => (
+              <Pressable onPress={() => router.back()} hitSlop={10}>
+                <Text className="text-base text-teal-700">Cancel</Text>
+              </Pressable>
+            ),
+          }}
+        />
+      )}
       <ScrollView
-      className="flex-1 bg-surface"
-      contentContainerClassName="grow px-4 pb-10 pt-2"
-      automaticallyAdjustKeyboardInsets
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="interactive"
-    >
-      <Text className="mb-1 text-base font-semibold text-text-primary">
-        Mode: {USE_STYLE_OBJECT ? 'style object (works)' : 'conditional className (bug)'}
-      </Text>
-      <Text className="mb-4 text-base text-text-primary">
-        Tap the field and type two digits. On iOS the keyboard dies after the first digit — and
-        the console never logs BLUR. Android is fine either way.
-      </Text>
-      <Field label="Score" value={value} onChangeText={setValue} />
-      <Text className="mt-4 text-sm text-text-primary">Typed so far: “{value}”</Text>
-      {/* Bulk: the affected form re-renders dozens of interop-styled rows on
-          every keystroke; simulate that load. */}
-      {Array.from({ length: 40 }, (_, i) => (
-        <View
-          key={i}
-          className={`mt-2 min-h-[44px] flex-row items-center rounded-xl bg-surface px-4 ${
-            i % 2 === 0 ? 'border border-border-control' : 'border border-teal-500'
-          }`}
-        >
-          <Text className="text-sm text-text-primary">
-            Row {i} — typed {value.length} digit{value.length === 1 ? '' : 's'}
-          </Text>
+        className="flex-1 bg-white"
+        contentContainerClassName="grow px-4 pb-10 pt-2"
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text className="mb-1 text-base font-semibold">
+          Header options: {STATIC_HEADER_OPTIONS ? 'static (works)' : 'per-render identity (bug)'}
+        </Text>
+        <Text className="mb-4 text-base">
+          Tap the field and type two digits. On iOS the keyboard dies after the first digit — and
+          the console never logs BLUR. Android is fine either way.
+        </Text>
+        <View className="w-32">
+          <Text className="mb-1 text-sm">Score</Text>
+          <TextInput
+            value={value}
+            onChangeText={setValue}
+            onFocus={() => setFocused(true)}
+            onBlur={() => {
+              setFocused(false);
+              console.log('BLUR fired'); // never logs when the bug kills the keyboard
+            }}
+            keyboardType="number-pad"
+            placeholder="—"
+            className="min-h-[48px] rounded-xl border border-gray-400 bg-white px-4 text-base"
+            style={focused ? { borderWidth: 2, borderColor: '#0d9488' } : undefined}
+          />
         </View>
-      ))}
-      <View className="h-96" />
+        <Text className="mt-4 text-sm">Typed so far: “{value}”</Text>
+        <View className="h-96" />
       </ScrollView>
     </View>
   );
